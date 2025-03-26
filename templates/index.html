@@ -12,14 +12,10 @@
       margin: 0;
       padding: 20px;
       display: flex;
+      flex-direction: column;
       justify-content: center;
       align-items: center;
       min-height: 100vh;
-    }
-    h1 {
-      color: #333;
-      margin-bottom: 20px;
-      text-align: center;
     }
     #game-container {
       background: #fff;
@@ -28,6 +24,7 @@
       padding: 20px;
       max-width: 600px;
       width: 100%;
+      text-align: center;
     }
     #board {
       border: 1px solid #ccc;
@@ -38,29 +35,15 @@
     #messages {
       font-size: 18px;
       color: #555;
-      text-align: center;
       margin-bottom: 20px;
       min-height: 24px;
     }
-    #controls {
-      text-align: center;
-    }
-    #controls button {
-      background: #4CAF50;
-      color: #fff;
-      border: none;
-      padding: 10px 20px;
-      margin: 5px;
-      border-radius: 5px;
-      font-size: 16px;
-      cursor: pointer;
-      transition: background 0.3s ease;
-    }
-    #controls button:hover {
-      background: #45a049;
-    }
-    #controls button:focus {
-      outline: none;
+    #instructions {
+      font-size: 14px;
+      color: #777;
+      border-top: 1px solid #eee;
+      padding-top: 10px;
+      margin-top: 20px;
     }
   </style>
 </head>
@@ -68,10 +51,16 @@
   <div id="game-container">
     <h1>Omok Voice Game</h1>
     <canvas id="board" width="560" height="560"></canvas>
-    <div id="messages">Loading game state...</div>
-    <div id="controls">
-      <button id="start-btn">Start Voice Command</button>
-      <button id="reset-btn">Reset Game</button>
+    <div id="messages">Say "Start" to begin the game.</div>
+    <div id="instructions">
+      <p><strong>Voice Commands:</strong></p>
+      <ul style="list-style: none; padding: 0;">
+        <li><strong>Start:</strong> Begin the game.</li>
+        <li><strong>Stop:</strong> Pause the game.</li>
+        <li><strong>Reset:</strong> Reset the game (allowed only when stopped or finished).</li>
+        <li>During an active game, speak a coordinate (e.g., A8) to place your stone.</li>
+        <li>After speaking a coordinate, confirm it by saying "Yes" or "No".</li>
+      </ul>
     </div>
   </div>
   <script>
@@ -80,8 +69,15 @@
     const canvas = document.getElementById("board");
     const ctx = canvas.getContext("2d");
     const messagesDiv = document.getElementById("messages");
-    const startBtn = document.getElementById("start-btn");
-    const resetBtn = document.getElementById("reset-btn");
+
+    // 게임 상태 변수
+    let gameActive = false;  // 게임 진행 중이면 true
+    let gamePaused = false;  // 일시정지 상태이면 true
+
+    // 음성 상태: "idle", "coordinate", "confirmation"
+    let voiceState = "idle";
+    let pendingRow = null;
+    let pendingCol = null;
 
     // 그리드 및 좌표 라벨 그리기
     function drawBoard(boardData) {
@@ -139,6 +135,8 @@
           drawBoard(data.board);
           if(data.winner) {
             messagesDiv.innerText = "Winner: " + data.winner;
+            gameActive = false;
+            voiceState = "idle";
           } else {
             messagesDiv.innerText = "Current turn: " + data.current_player;
           }
@@ -161,61 +159,121 @@
       recognition.continuous = true;
 
       recognition.onresult = function(event) {
-        const transcript = event.results[event.results.length - 1][0].transcript.trim();
-        messagesDiv.innerText = "You said: " + transcript;
-        let parts = transcript.split(" ");
-        if (parts.length < 2) {
-          const match = transcript.match(/^([A-Za-z])\s*([0-9]+)$/);
-          if (match) {
-            parts = [match[1], match[2]];
+        const transcript = event.results[event.results.length - 1][0].transcript.trim().toLowerCase();
+        console.log("Recognized:", transcript);
+
+        // 우선 전역 명령어 처리
+        if(transcript === "start") {
+          if(!gameActive) {
+            gameActive = true;
+            gamePaused = false;
+            voiceState = "coordinate";
+            messagesDiv.innerText = "Game started. Please say a coordinate (e.g., A8).";
+            fetchGameState();
+          } else {
+            messagesDiv.innerText = "Game is already active.";
           }
-        }
-        if(parts.length < 2) {
-          messagesDiv.innerText = "Could not parse the command. Please try again.";
           return;
         }
-        let rowLetter = parts[0];
-        let colPart = parts[1];
-
-        const wordToNumber = {
-          "one": 1, "two": 2, "three": 3, "four": 4, "five": 5,
-          "six": 6, "seven": 7, "eight": 8, "nine": 9, "ten": 10,
-          "eleven": 11, "twelve": 12, "thirteen": 13, "fourteen": 14
-        };
-
-        let colNumber = parseInt(colPart);
-        if (isNaN(colNumber)) {
-          colNumber = wordToNumber[colPart.toLowerCase()];
-        }
-        if (!colNumber) {
-          messagesDiv.innerText = "Invalid column input.";
+        if(transcript === "stop") {
+          if(gameActive) {
+            gameActive = false;
+            gamePaused = true;
+            recognition.stop();
+            voiceState = "idle";
+            messagesDiv.innerText = "Game paused. Say 'Start' to resume or 'Reset' to restart.";
+          } else {
+            messagesDiv.innerText = "Game is not active.";
+          }
           return;
         }
-        sendMove(rowLetter, colNumber);
+        if(transcript === "reset") {
+          if(!gameActive || gamePaused) {
+            fetch('/api/game/reset', { method: "POST" })
+              .then(response => response.json())
+              .then(data => {
+                drawBoard(data.board);
+                messagesDiv.innerText = "Game reset. Say 'Start' to begin.";
+                gameActive = false;
+                gamePaused = false;
+                voiceState = "idle";
+              })
+              .catch(err => console.error("Reset error:", err));
+          } else {
+            messagesDiv.innerText = "Cannot reset while game is active. Say 'Stop' first.";
+          }
+          return;
+        }
+        
+        // 게임이 활성화 중일 때만 좌표 처리
+        if(gameActive) {
+          if(voiceState === "coordinate") {
+            // 좌표 입력 처리 (예: "A8" 또는 "A 8")
+            let parts = transcript.split(" ");
+            if(parts.length < 2) {
+              const match = transcript.match(/^([A-Za-z])\s*([0-9]+)$/);
+              if(match) {
+                parts = [match[1], match[2]];
+              }
+            }
+            if(parts.length < 2) {
+              messagesDiv.innerText = "Could not parse the coordinate. Please try again.";
+              return;
+            }
+            let rowLetter = parts[0].toUpperCase();
+            let colPart = parts[1];
+            const wordToNumber = {
+              "one": 1, "two": 2, "three": 3, "four": 4, "five": 5,
+              "six": 6, "seven": 7, "eight": 8, "nine": 9, "ten": 10,
+              "eleven": 11, "twelve": 12, "thirteen": 13, "fourteen": 14
+            };
+            let colNumber = parseInt(colPart);
+            if(isNaN(colNumber)) {
+              colNumber = wordToNumber[colPart.toLowerCase()];
+            }
+            if(!colNumber) {
+              messagesDiv.innerText = "Invalid column input. Please try again.";
+              return;
+            }
+            // 입력 좌표를 pending 상태로 저장 후 확인 요청
+            pendingRow = rowLetter;
+            pendingCol = colNumber;
+            messagesDiv.innerText = "You said: " + rowLetter + colNumber + ". Is that correct? Say Yes or No.";
+            voiceState = "confirmation";
+          }
+          else if(voiceState === "confirmation") {
+            if(transcript === "yes") {
+              sendMove(pendingRow, pendingCol);
+              voiceState = "coordinate";
+            } else if(transcript === "no") {
+              messagesDiv.innerText = "Okay, please say the coordinate again.";
+              voiceState = "coordinate";
+            } else {
+              messagesDiv.innerText = "Please answer with Yes or No.";
+            }
+          }
+        } else {
+          messagesDiv.innerText = "Say 'Start' to begin the game.";
+        }
       };
 
       recognition.onerror = function(event) {
         messagesDiv.innerText = "Error in recognition: " + event.error;
       };
+
+      // 자동 재시작: 게임이 활성 상태라면 계속 듣기
+      recognition.onend = function() {
+        if(gameActive) {
+          recognition.start();
+        }
+      };
+
+      // 페이지 로드 후 즉시 음성 인식 시작
+      recognition.start();
+      messagesDiv.innerText = "Listening... Say 'Start' to begin.";
     }
 
-    startBtn.addEventListener("click", function() {
-      if (recognition) {
-        recognition.start();
-        messagesDiv.innerText = "Listening continuously...";
-      }
-    });
-
-    resetBtn.addEventListener("click", function() {
-      fetch('/api/game/reset', { method: "POST" })
-        .then(response => response.json())
-        .then(data => {
-          drawBoard(data.board);
-          messagesDiv.innerText = "Game reset. Current turn: " + data.current_player;
-        })
-        .catch(err => console.error("Reset error:", err));
-    });
-
+    // 페이지 로드시 게임 상태 불러오기 (게임은 기본적으로 시작 전)
     fetchGameState();
   </script>
 </body>
