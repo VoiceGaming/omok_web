@@ -57,7 +57,7 @@
       <ul style="list-style: none; padding: 0;">
         <li><strong>Start:</strong> Begin the game.</li>
         <li><strong>Stop:</strong> Pause the game.</li>
-        <li><strong>Reset:</strong> Reset the game (this will force stop if needed).</li>
+        <li><strong>Reset:</strong> Reset the game (allowed only when stopped or finished).</li>
         <li>During an active game, speak a coordinate (e.g., A8) to place your stone.</li>
         <li>After speaking a coordinate, confirm it by saying "Yes" or "No".</li>
       </ul>
@@ -117,7 +117,12 @@
         .then(response => response.json())
         .then(data => {
           drawBoard(data.board);
-          messagesDiv.innerText = "Current turn: " + data.current_player;
+          // 게임이 활성화 되어 있으면 현재 턴 표시, 아니면 시작 안내 메시지 표시
+          if(gameActive) {
+            messagesDiv.innerText = "Current turn: " + data.current_player;
+          } else {
+            messagesDiv.innerText = "Say 'Start' to begin the game.";
+          }
         })
         .catch(err => console.error("Error fetching game state:", err));
     }
@@ -149,7 +154,6 @@
 
     // Reset: 강제로 게임 상태 초기화
     function resetGame() {
-      // 강제로 정지 시킨 후 리셋
       if(gameActive) {
         gameActive = false;
         gamePaused = true;
@@ -167,7 +171,7 @@
         .catch(err => console.error("Reset error:", err));
     }
 
-    // Web Speech API를 이용한 음성 인식 (연속 모드)
+    // Web Speech API를 이용한 음성 인식 (연속 모드 + confidence 필터링)
     let recognition;
     if (!('webkitSpeechRecognition' in window)) {
       messagesDiv.innerText = "Sorry, your browser does not support speech recognition.";
@@ -179,8 +183,16 @@
       recognition.continuous = true;
 
       recognition.onresult = function(event) {
-        const transcript = event.results[event.results.length - 1][0].transcript.trim().toLowerCase();
-        console.log("Recognized:", transcript);
+        const lastResult = event.results[event.results.length - 1][0];
+        const transcript = lastResult.transcript.trim().toLowerCase();
+        const confidence = lastResult.confidence;
+        console.log("Recognized:", transcript, "with confidence:", confidence);
+        
+        // 신뢰도 0.6 미만인 결과는 무시
+        if(confidence < 0.6) {
+          console.log("Low confidence (" + confidence + "), ignoring result.");
+          return;
+        }
 
         // 전역 명령어 우선 처리
         if(transcript === "start") {
@@ -212,7 +224,7 @@
           return;
         }
         
-        // 게임이 활성화 중일 때만 좌표 처리
+        // 게임 활성화 상태에서 좌표 처리
         if(gameActive) {
           if(voiceState === "coordinate") {
             // 좌표 입력 처리 (예: "A8" 또는 "A 8")
@@ -242,7 +254,7 @@
               messagesDiv.innerText = "Invalid column input. Please try again.";
               return;
             }
-            // 좌표 입력을 pending 상태로 저장 후 확인 요청
+            // 입력 좌표를 pending 상태로 저장 후 확인 요청
             pendingRow = rowLetter;
             pendingCol = colNumber;
             messagesDiv.innerText = "You said: " + rowLetter + colNumber + ". Is that correct? Say Yes or No.";
@@ -277,7 +289,7 @@
 
       // 페이지 로드 후 바로 음성 인식 시작
       recognition.start();
-      messagesDiv.innerText = "Listening... Say 'Start' to begin.";
+      messagesDiv.innerText = "Listening... Say 'Start' to begin the game.";
     }
 
     // 페이지 로드시 초기 게임 상태 불러오기 (게임은 기본적으로 시작 전)
