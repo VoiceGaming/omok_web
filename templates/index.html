@@ -57,7 +57,7 @@
       <ul style="list-style: none; padding: 0;">
         <li><strong>Start:</strong> Begin the game.</li>
         <li><strong>Stop:</strong> Pause the game.</li>
-        <li><strong>Reset:</strong> Reset the game (allowed only when stopped or finished).</li>
+        <li><strong>Reset:</strong> Reset the game (allowed only when paused or finished).</li>
         <li>During an active game, speak a coordinate (e.g., A8) to place your stone.</li>
         <li>After speaking a coordinate, confirm it by saying "Yes" or "No".</li>
       </ul>
@@ -117,7 +117,7 @@
         .then(response => response.json())
         .then(data => {
           drawBoard(data.board);
-          // 게임이 활성화 되어 있으면 현재 턴 표시, 아니면 시작 안내 메시지 표시
+          // 게임 활성화되어 있으면 현재 턴 표시, 아니면 시작 안내 메시지 출력
           if(gameActive) {
             messagesDiv.innerText = "Current turn: " + data.current_player;
           } else {
@@ -152,12 +152,11 @@
       .catch(err => console.error("Error sending move:", err));
     }
 
-    // Reset: 강제로 게임 상태 초기화
+    // Reset: 게임이 정지 상태일 때만 허용 (게임 활성 중이면 리셋 명령 무시)
     function resetGame() {
       if(gameActive) {
-        gameActive = false;
-        gamePaused = true;
-        recognition.stop();
+        messagesDiv.innerText = "Cannot reset while game is active. Say 'Stop' first.";
+        return;
       }
       fetch('/api/game/reset', { method: "POST" })
         .then(response => response.json())
@@ -188,7 +187,7 @@
         const confidence = lastResult.confidence;
         console.log("Recognized:", transcript, "with confidence:", confidence);
         
-        // 신뢰도 0.6 미만인 결과는 무시
+        // 신뢰도 0.6 미만이면 무시
         if(confidence < 0.6) {
           console.log("Low confidence (" + confidence + "), ignoring result.");
           return;
@@ -211,7 +210,7 @@
           if(gameActive) {
             gameActive = false;
             gamePaused = true;
-            recognition.stop();
+            // 음성 인식은 계속 활성 상태를 유지함
             voiceState = "idle";
             messagesDiv.innerText = "Game paused. Say 'Start' to resume or 'Reset' to restart.";
           } else {
