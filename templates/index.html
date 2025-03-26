@@ -1,171 +1,222 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <title>Omok Voice Game</title>
-    <style>
-        body { font-family: Arial, sans-serif; }
-        #board { border: 2px solid #333; background-color: burlywood; }
-        #messages { margin-top: 10px; }
-        #controls { margin-top: 10px; }
-    </style>
+  <meta charset="UTF-8">
+  <title>Omok Voice Game</title>
+  <link href="https://fonts.googleapis.com/css?family=Montserrat:400,700&display=swap" rel="stylesheet">
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      background: #f2f2f2;
+      font-family: 'Montserrat', sans-serif;
+      margin: 0;
+      padding: 20px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+    }
+    h1 {
+      color: #333;
+      margin-bottom: 20px;
+      text-align: center;
+    }
+    #game-container {
+      background: #fff;
+      border-radius: 8px;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+      padding: 20px;
+      max-width: 600px;
+      width: 100%;
+    }
+    #board {
+      border: 1px solid #ccc;
+      background-color: #f8e6c4;
+      display: block;
+      margin: 0 auto 20px auto;
+    }
+    #messages {
+      font-size: 18px;
+      color: #555;
+      text-align: center;
+      margin-bottom: 20px;
+      min-height: 24px;
+    }
+    #controls {
+      text-align: center;
+    }
+    #controls button {
+      background: #4CAF50;
+      color: #fff;
+      border: none;
+      padding: 10px 20px;
+      margin: 5px;
+      border-radius: 5px;
+      font-size: 16px;
+      cursor: pointer;
+      transition: background 0.3s ease;
+    }
+    #controls button:hover {
+      background: #45a049;
+    }
+    #controls button:focus {
+      outline: none;
+    }
+  </style>
 </head>
 <body>
+  <div id="game-container">
     <h1>Omok Voice Game</h1>
     <canvas id="board" width="560" height="560"></canvas>
-    <div id="messages"></div>
+    <div id="messages">Loading game state...</div>
     <div id="controls">
-        <button id="start-btn">Start Voice Command</button>
-        <button id="reset-btn">Reset Game</button>
+      <button id="start-btn">Start Voice Command</button>
+      <button id="reset-btn">Reset Game</button>
     </div>
-    <script>
-        const BOARD_SIZE = 14;
-        const CELL_SIZE = 40;
-        const canvas = document.getElementById("board");
-        const ctx = canvas.getContext("2d");
-        const messagesDiv = document.getElementById("messages");
-        const startBtn = document.getElementById("start-btn");
-        const resetBtn = document.getElementById("reset-btn");
+  </div>
+  <script>
+    const BOARD_SIZE = 14;
+    const CELL_SIZE = 40;
+    const canvas = document.getElementById("board");
+    const ctx = canvas.getContext("2d");
+    const messagesDiv = document.getElementById("messages");
+    const startBtn = document.getElementById("start-btn");
+    const resetBtn = document.getElementById("reset-btn");
 
-        // 그리드 및 좌표 라벨 그리기
-        function drawBoard(boardData) {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            for (let i = 0; i < BOARD_SIZE; i++) {
-                for (let j = 0; j < BOARD_SIZE; j++) {
-                    ctx.strokeStyle = "black";
-                    ctx.strokeRect(j * CELL_SIZE, i * CELL_SIZE, CELL_SIZE, CELL_SIZE);
-                    ctx.font = "10px Arial";
-                    ctx.fillStyle = "gray";
-                    const label = String.fromCharCode(65 + i) + (j + 1);
-                    ctx.fillText(label, j * CELL_SIZE + CELL_SIZE/2 - 10, i * CELL_SIZE + CELL_SIZE/2 + 3);
-                }
-            }
-            // 돌 그리기
-            for (let i = 0; i < BOARD_SIZE; i++) {
-                for (let j = 0; j < BOARD_SIZE; j++) {
-                    const stone = boardData[i][j];
-                    if (stone) {
-                        ctx.beginPath();
-                        const x = j * CELL_SIZE + CELL_SIZE/2;
-                        const y = i * CELL_SIZE + CELL_SIZE/2;
-                        ctx.arc(x, y, 15, 0, 2 * Math.PI);
-                        ctx.fillStyle = (stone === "black") ? "black" : "white";
-                        ctx.fill();
-                        ctx.stroke();
-                    }
-                }
-            }
+    // 그리드 및 좌표 라벨 그리기
+    function drawBoard(boardData) {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      for (let i = 0; i < BOARD_SIZE; i++) {
+        for (let j = 0; j < BOARD_SIZE; j++) {
+          ctx.strokeStyle = "#555";
+          ctx.lineWidth = 1;
+          ctx.strokeRect(j * CELL_SIZE, i * CELL_SIZE, CELL_SIZE, CELL_SIZE);
+          ctx.font = "10px Montserrat";
+          ctx.fillStyle = "#999";
+          const label = String.fromCharCode(65 + i) + (j + 1);
+          ctx.fillText(label, j * CELL_SIZE + CELL_SIZE/2 - 10, i * CELL_SIZE + CELL_SIZE/2 + 3);
         }
-
-        // 서버로부터 현재 게임 상태 가져오기
-        function fetchGameState() {
-            fetch('/api/game')
-                .then(response => response.json())
-                .then(data => {
-                    drawBoard(data.board);
-                    messagesDiv.innerText = "Current turn: " + data.current_player;
-                })
-                .catch(err => console.error("Error fetching game state:", err));
+      }
+      // 돌 그리기
+      for (let i = 0; i < BOARD_SIZE; i++) {
+        for (let j = 0; j < BOARD_SIZE; j++) {
+          const stone = boardData[i][j];
+          if (stone) {
+            ctx.beginPath();
+            const x = j * CELL_SIZE + CELL_SIZE/2;
+            const y = i * CELL_SIZE + CELL_SIZE/2;
+            ctx.arc(x, y, 15, 0, 2 * Math.PI);
+            ctx.fillStyle = (stone === "black") ? "#333" : "#fff";
+            ctx.fill();
+            ctx.strokeStyle = "#000";
+            ctx.stroke();
+          }
         }
+      }
+    }
 
-        // 서버에 돌 두기 명령 전송
-        function sendMove(row, col) {
-            fetch('/api/move', {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ row: row, col: col })
-            })
-            .then(response => response.json())
-            .then(data => {
-                if(data.status === "success") {
-                    drawBoard(data.board);
-                    if(data.winner) {
-                        messagesDiv.innerText = "Winner: " + data.winner;
-                    } else {
-                        messagesDiv.innerText = "Current turn: " + data.current_player;
-                    }
-                } else {
-                    messagesDiv.innerText = "Error: " + data.message;
-                }
-            })
-            .catch(err => console.error("Error sending move:", err));
-        }
+    // 서버로부터 현재 게임 상태 가져오기
+    function fetchGameState() {
+      fetch('/api/game')
+        .then(response => response.json())
+        .then(data => {
+          drawBoard(data.board);
+          messagesDiv.innerText = "Current turn: " + data.current_player;
+        })
+        .catch(err => console.error("Error fetching game state:", err));
+    }
 
-        // Web Speech API를 이용한 음성 인식
-        let recognition;
-        if (!('webkitSpeechRecognition' in window)) {
-            messagesDiv.innerText = "Sorry, your browser does not support speech recognition.";
+    // 서버에 돌 두기 명령 전송
+    function sendMove(row, col) {
+      fetch('/api/move', {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ row: row, col: col })
+      })
+      .then(response => response.json())
+      .then(data => {
+        if(data.status === "success") {
+          drawBoard(data.board);
+          if(data.winner) {
+            messagesDiv.innerText = "Winner: " + data.winner;
+          } else {
+            messagesDiv.innerText = "Current turn: " + data.current_player;
+          }
         } else {
-            recognition = new webkitSpeechRecognition();
-            recognition.lang = "en-US";
-            recognition.interimResults = false;
-            recognition.maxAlternatives = 1;
-            // 연속 모드 활성화
-            recognition.continuous = true;
-
-            recognition.onresult = function(event) {
-                const transcript = event.results[event.results.length - 1][0].transcript.trim();
-                messagesDiv.innerText = "You said: " + transcript;
-                // 예: "A eight" 또는 "B 10"의 형태라고 가정
-                let parts = transcript.split(" ");
-                // 만약 한 단어로 인식되었다면 정규식으로 보완
-                if (parts.length < 2) {
-                    const match = transcript.match(/^([A-Za-z])\s*([0-9]+)$/);
-                    if (match) {
-                        parts = [match[1], match[2]];
-                    }
-                }
-                if(parts.length < 2) {
-                    messagesDiv.innerText = "Could not parse the command. Please try again.";
-                    return;
-                }
-                let rowLetter = parts[0];
-                let colPart = parts[1];
-
-                const wordToNumber = {
-                    "one": 1, "two": 2, "three": 3, "four": 4, "five": 5,
-                    "six": 6, "seven": 7, "eight": 8, "nine": 9, "ten": 10,
-                    "eleven": 11, "twelve": 12, "thirteen": 13, "fourteen": 14
-                };
-
-                let colNumber = parseInt(colPart);
-                if (isNaN(colNumber)) {
-                    colNumber = wordToNumber[colPart.toLowerCase()];
-                }
-                if (!colNumber) {
-                    messagesDiv.innerText = "Invalid column input.";
-                    return;
-                }
-                // 서버로 이동 요청 전송
-                sendMove(rowLetter, colNumber);
-            };
-
-            recognition.onerror = function(event) {
-                messagesDiv.innerText = "Error in recognition: " + event.error;
-            };
+          messagesDiv.innerText = "Error: " + data.message;
         }
+      })
+      .catch(err => console.error("Error sending move:", err));
+    }
 
-        // 음성 인식 시작 버튼 이벤트
-        startBtn.addEventListener("click", function() {
-            if (recognition) {
-                recognition.start();
-                messagesDiv.innerText = "Listening continuously...";
-            }
-        });
+    // Web Speech API를 이용한 음성 인식 (연속 모드)
+    let recognition;
+    if (!('webkitSpeechRecognition' in window)) {
+      messagesDiv.innerText = "Sorry, your browser does not support speech recognition.";
+    } else {
+      recognition = new webkitSpeechRecognition();
+      recognition.lang = "en-US";
+      recognition.interimResults = false;
+      recognition.maxAlternatives = 1;
+      recognition.continuous = true;
 
-        // 게임 초기화 버튼 이벤트
-        resetBtn.addEventListener("click", function() {
-            fetch('/api/game/reset', { method: "POST" })
-                .then(response => response.json())
-                .then(data => {
-                    drawBoard(data.board);
-                    messagesDiv.innerText = "Game reset. Current turn: " + data.current_player;
-                })
-                .catch(err => console.error("Reset error:", err));
-        });
+      recognition.onresult = function(event) {
+        const transcript = event.results[event.results.length - 1][0].transcript.trim();
+        messagesDiv.innerText = "You said: " + transcript;
+        let parts = transcript.split(" ");
+        if (parts.length < 2) {
+          const match = transcript.match(/^([A-Za-z])\s*([0-9]+)$/);
+          if (match) {
+            parts = [match[1], match[2]];
+          }
+        }
+        if(parts.length < 2) {
+          messagesDiv.innerText = "Could not parse the command. Please try again.";
+          return;
+        }
+        let rowLetter = parts[0];
+        let colPart = parts[1];
 
-        // 페이지 로드시 초기 게임 상태 불러오기
-        fetchGameState();
-    </script>
+        const wordToNumber = {
+          "one": 1, "two": 2, "three": 3, "four": 4, "five": 5,
+          "six": 6, "seven": 7, "eight": 8, "nine": 9, "ten": 10,
+          "eleven": 11, "twelve": 12, "thirteen": 13, "fourteen": 14
+        };
+
+        let colNumber = parseInt(colPart);
+        if (isNaN(colNumber)) {
+          colNumber = wordToNumber[colPart.toLowerCase()];
+        }
+        if (!colNumber) {
+          messagesDiv.innerText = "Invalid column input.";
+          return;
+        }
+        sendMove(rowLetter, colNumber);
+      };
+
+      recognition.onerror = function(event) {
+        messagesDiv.innerText = "Error in recognition: " + event.error;
+      };
+    }
+
+    startBtn.addEventListener("click", function() {
+      if (recognition) {
+        recognition.start();
+        messagesDiv.innerText = "Listening continuously...";
+      }
+    });
+
+    resetBtn.addEventListener("click", function() {
+      fetch('/api/game/reset', { method: "POST" })
+        .then(response => response.json())
+        .then(data => {
+          drawBoard(data.board);
+          messagesDiv.innerText = "Game reset. Current turn: " + data.current_player;
+        })
+        .catch(err => console.error("Reset error:", err));
+    });
+
+    fetchGameState();
+  </script>
 </body>
 </html>
