@@ -57,7 +57,7 @@
       <ul style="list-style: none; padding: 0;">
         <li><strong>Start:</strong> Begin the game.</li>
         <li><strong>Stop:</strong> Pause the game.</li>
-        <li><strong>Reset:</strong> Reset the game (allowed only when stopped or finished).</li>
+        <li><strong>Reset:</strong> Reset the game (this will force stop if needed).</li>
         <li>During an active game, speak a coordinate (e.g., A8) to place your stone.</li>
         <li>After speaking a coordinate, confirm it by saying "Yes" or "No".</li>
       </ul>
@@ -147,6 +147,26 @@
       .catch(err => console.error("Error sending move:", err));
     }
 
+    // Reset: 강제로 게임 상태 초기화
+    function resetGame() {
+      // 강제로 정지 시킨 후 리셋
+      if(gameActive) {
+        gameActive = false;
+        gamePaused = true;
+        recognition.stop();
+      }
+      fetch('/api/game/reset', { method: "POST" })
+        .then(response => response.json())
+        .then(data => {
+          drawBoard(data.board);
+          messagesDiv.innerText = "Game reset. Say 'Start' to begin.";
+          gameActive = false;
+          gamePaused = false;
+          voiceState = "idle";
+        })
+        .catch(err => console.error("Reset error:", err));
+    }
+
     // Web Speech API를 이용한 음성 인식 (연속 모드)
     let recognition;
     if (!('webkitSpeechRecognition' in window)) {
@@ -162,7 +182,7 @@
         const transcript = event.results[event.results.length - 1][0].transcript.trim().toLowerCase();
         console.log("Recognized:", transcript);
 
-        // 우선 전역 명령어 처리
+        // 전역 명령어 우선 처리
         if(transcript === "start") {
           if(!gameActive) {
             gameActive = true;
@@ -188,20 +208,7 @@
           return;
         }
         if(transcript === "reset") {
-          if(!gameActive || gamePaused) {
-            fetch('/api/game/reset', { method: "POST" })
-              .then(response => response.json())
-              .then(data => {
-                drawBoard(data.board);
-                messagesDiv.innerText = "Game reset. Say 'Start' to begin.";
-                gameActive = false;
-                gamePaused = false;
-                voiceState = "idle";
-              })
-              .catch(err => console.error("Reset error:", err));
-          } else {
-            messagesDiv.innerText = "Cannot reset while game is active. Say 'Stop' first.";
-          }
+          resetGame();
           return;
         }
         
@@ -235,7 +242,7 @@
               messagesDiv.innerText = "Invalid column input. Please try again.";
               return;
             }
-            // 입력 좌표를 pending 상태로 저장 후 확인 요청
+            // 좌표 입력을 pending 상태로 저장 후 확인 요청
             pendingRow = rowLetter;
             pendingCol = colNumber;
             messagesDiv.innerText = "You said: " + rowLetter + colNumber + ". Is that correct? Say Yes or No.";
@@ -268,12 +275,12 @@
         }
       };
 
-      // 페이지 로드 후 즉시 음성 인식 시작
+      // 페이지 로드 후 바로 음성 인식 시작
       recognition.start();
       messagesDiv.innerText = "Listening... Say 'Start' to begin.";
     }
 
-    // 페이지 로드시 게임 상태 불러오기 (게임은 기본적으로 시작 전)
+    // 페이지 로드시 초기 게임 상태 불러오기 (게임은 기본적으로 시작 전)
     fetchGameState();
   </script>
 </body>
